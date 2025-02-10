@@ -1,0 +1,5 @@
+# Aqua
+
+```shell
+$ make && ./main
+```
