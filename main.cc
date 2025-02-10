@@ -19,6 +19,7 @@ using namespace std;
 #define DT 2.f
 #define COLLISION_DAMPLING 0.9f
 #define NUM_PARTICLES 16
+#define SMOOTHING_RADIUS 160.f
 
 static bool PAUSE = false;
 
@@ -92,6 +93,24 @@ void aqua_init(void) {
               spacing;
     positions[i] = Vector2d(x + VIEW_WIDTH / 2, y + VIEW_HEIGHT / 2);
   }
+}
+
+float aqua_smoothing_kernel(float radius, float dst) {
+  float value = fmaxf(0, radius * radius - dst * dst);
+  return value * value * value;
+}
+
+float aqua_calculate_density(Vector2d sample_point) {
+  float density = 0;
+  const float mass = 1;
+
+  for (auto &position : positions) {
+    float dst = (position - sample_point).norm();
+    float influence = aqua_smoothing_kernel(SMOOTHING_RADIUS, dst);
+    density += mass * influence;
+  }
+
+  return density;
 }
 
 void aqua_gl_init(void) {
