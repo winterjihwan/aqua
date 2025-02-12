@@ -9,6 +9,7 @@
 using namespace Eigen;
 using namespace std;
 
+#define FPS 60
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 #define VIEW_WIDTH (1.5f * WINDOW_WIDTH)
@@ -20,11 +21,11 @@ using namespace std;
 #define GRAVITY 0.04f
 #define DT 2.f
 #define COLLISION_DAMPLING 0.9f
-#define NUM_PARTICLES 100
+#define NUM_PARTICLES 300
 #define SMOOTHING_RADIUS 160.f
 
 #define TARGET_DENSITY 0.1f
-static float PRESSURE_MULTIPLIER = 0.1f;
+static float PRESSURE_MULTIPLIER = 1.f;
 
 static bool PAUSE = false;
 
@@ -127,7 +128,13 @@ void aqua_update_densities() {
 
 Vector2d aqua_get_random_dir() {
   float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * M_PI;
-  return Vector2d(std::cos(angle), std::sin(angle));
+  return Vector2d(cos(angle), sin(angle));
+}
+
+float aqua_calculate_shared_pressure(float densityA, float densityB) {
+  float pressureA = aqua_convert_density_to_pressure(densityA);
+  float pressureB = aqua_convert_density_to_pressure(densityB);
+  return (pressureA / pressureB) / 2;
 }
 
 Vector2d aqua_calculate_pressure_force(int particle_index) {
@@ -173,7 +180,7 @@ void aqua_keyboard(unsigned char c, int x, int y) {
   }
 }
 
-void aqua_update(void) {
+void aqua_update(int value) {
   if (PAUSE) {
     for (int i = 0; i < positions.size(); i++) {
       velocities[i] += Vector2d(0.f, 1.f) * GRAVITY * DT;
@@ -192,6 +199,7 @@ void aqua_update(void) {
     }
   }
   glutPostRedisplay();
+  glutTimerFunc(1000 / FPS, aqua_update, 0);
 }
 
 int main(int argc, char **argv) {
@@ -200,7 +208,7 @@ int main(int argc, char **argv) {
   glutInit(&argc, argv);
   glutCreateWindow("Aqua");
   glutDisplayFunc(aqua_render);
-  glutIdleFunc(aqua_update);
+  glutTimerFunc(1000 / FPS, aqua_update, 0);
   glutKeyboardFunc(aqua_keyboard);
 
   aqua_init();
