@@ -24,7 +24,7 @@ using namespace std;
 #define SMOOTHING_RADIUS 160.f
 
 #define TARGET_DENSITY 0.1f
-static float PRESSURE_MULTIPLIER = 0.01f;
+static float PRESSURE_MULTIPLIER = 0.1f;
 
 static bool PAUSE = false;
 
@@ -85,17 +85,19 @@ void aqua_init(void) {
 }
 
 float aqua_smoothing_kernel(float dst, float radius) {
-  float volume = M_PI * pow(radius, 8);
-  float value = fmaxf(0, radius * radius - dst * dst);
-  return value * value * value / volume;
+  if (dst >= radius)
+    return 0;
+
+  float volume = (M_PI * pow(radius, 4)) / 6;
+  return (radius - dst) * (radius - dst) / volume;
 }
 
 float aqua_smoothing_kernel_derivative(float dst, float radius) {
   if (dst >= radius)
     return 0;
-  float f = radius * radius - dst * dst;
-  float scale = -24 / (M_PI * pow(radius, 8));
-  return scale * dst * f * f;
+
+  float scale = 12 / (pow(radius, 4) * M_PI);
+  return (dst - radius) * scale;
 }
 
 float aqua_convert_density_to_pressure(float density) {
