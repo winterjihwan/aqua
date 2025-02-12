@@ -20,11 +20,11 @@ using namespace std;
 #define GRAVITY 0.04f
 #define DT 2.f
 #define COLLISION_DAMPLING 0.9f
-#define NUM_PARTICLES 25
+#define NUM_PARTICLES 100
 #define SMOOTHING_RADIUS 160.f
 
-#define TARGET_DENSITY 1.f
-#define PRESSURE_MULTIPLIER 0.001f
+#define TARGET_DENSITY 0.1f
+static float PRESSURE_MULTIPLIER = 0.01f;
 
 static bool PAUSE = false;
 
@@ -63,11 +63,11 @@ void aqua_resolve_collisions(Vector2d &p, Vector2d &v) {
   float y = p(1) - VIEW_HEIGHT / 2;
 
   if (abs(x) > half_bounds_size(0)) {
-    x = half_bounds_size(0) * -1;
+    x = copysign(half_bounds_size(0), x);
     v(0) *= -1 * COLLISION_DAMPLING;
   }
   if (abs(y) > half_bounds_size(1)) {
-    y = half_bounds_size(1) * -1;
+    y = copysign(half_bounds_size(1), y);
     v(1) *= -1 * COLLISION_DAMPLING;
   }
 
@@ -84,13 +84,13 @@ void aqua_init(void) {
   }
 }
 
-float aqua_smoothing_kernel(float radius, float dst) {
+float aqua_smoothing_kernel(float dst, float radius) {
   float volume = M_PI * pow(radius, 8);
   float value = fmaxf(0, radius * radius - dst * dst);
   return value * value * value / volume;
 }
 
-float aqua_smoothing_kernel_derivative(float radius, float dst) {
+float aqua_smoothing_kernel_derivative(float dst, float radius) {
   if (dst >= radius)
     return 0;
   float f = radius * radius - dst * dst;
@@ -110,7 +110,7 @@ float aqua_calculate_density(Vector2d sample_point) {
 
   for (auto &position : positions) {
     float dst = (position - sample_point).norm();
-    float influence = aqua_smoothing_kernel(SMOOTHING_RADIUS, dst);
+    float influence = aqua_smoothing_kernel(dst, SMOOTHING_RADIUS);
     density += mass * influence;
   }
 
@@ -164,20 +164,24 @@ void aqua_keyboard(unsigned char c, int x, int y) {
     break;
   case 'p':
     PAUSE = !PAUSE;
+  case 'a':
+    PRESSURE_MULTIPLIER *= 2;
+  case 'b':
+    PRESSURE_MULTIPLIER /= 2;
   }
 }
 
 void aqua_update(void) {
   if (PAUSE) {
     for (int i = 0; i < positions.size(); i++) {
-      velocities[i] += Vector2d(0.f, -1.f) * GRAVITY * DT;
+      velocities[i] += Vector2d(0.f, 1.f) * GRAVITY * DT;
       densities[i] = aqua_calculate_density(positions[i]);
     }
 
     for (int i = 0; i < positions.size(); i++) {
       Vector2d pressure_force = aqua_calculate_pressure_force(i);
       Vector2d pressure_acceleration = pressure_force / densities[i];
-      velocities[i] += pressure_acceleration;
+      velocities[i] = pressure_acceleration;
     }
 
     for (int i = 0; i < positions.size(); i++) {
