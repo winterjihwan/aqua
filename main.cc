@@ -18,14 +18,14 @@ using namespace std;
 
 #define PARTICLE_SIZE 8.f
 #define PARTICLE_SPACING 10.f
-#define GRAVITY 0.04f
+#define GRAVITY 0.00005f
 #define DT 2.f
-#define COLLISION_DAMPLING 0.9f
+#define COLLISION_DAMPLING 0.98f
 #define NUM_PARTICLES 300
 #define SMOOTHING_RADIUS 160.f
 
 #define TARGET_DENSITY 0.1f
-static float PRESSURE_MULTIPLIER = 1.f;
+static float PRESSURE_MULTIPLIER = 0.2f;
 
 static bool PAUSE = false;
 
@@ -36,8 +36,9 @@ struct Particle {
   Vector2d x, v;
 };
 
-static vector<Vector2d> positions(NUM_PARTICLES);
+static vector<Vector2d> positions;
 static vector<Vector2d> velocities(NUM_PARTICLES);
+static vector<Vector2d> predicted_positions(NUM_PARTICLES);
 static vector<float> densities(NUM_PARTICLES);
 
 void aqua_render(void) {
@@ -77,11 +78,17 @@ void aqua_resolve_collisions(Vector2d &p, Vector2d &v) {
 }
 
 void aqua_init(void) {
-  for (int i = 0; i < NUM_PARTICLES; i++) {
-    float x = arc4random() % (int)VIEW_WIDTH;
-    float y = arc4random() % (int)VIEW_HEIGHT;
-
-    positions[i] = Vector2d(x, y);
+  const static float H = 24.f;
+  const static float EPS = H;
+  for (float y = EPS; y < VIEW_HEIGHT - EPS * 2.f; y += H) {
+    for (float x = VIEW_WIDTH / 4; x <= VIEW_WIDTH / 2; x += H) {
+      if (positions.size() < NUM_PARTICLES) {
+        float jitter =
+            static_cast<float>(arc4random()) / static_cast<float>(RAND_MAX);
+        positions.push_back(Vector2d(x + jitter, y));
+      } else {
+      }
+    }
   }
 }
 
@@ -120,12 +127,6 @@ float aqua_calculate_density(Vector2d sample_point) {
   return density;
 }
 
-void aqua_update_densities() {
-  for (int i = 0; i < NUM_PARTICLES; i++) {
-    densities[i] = aqua_calculate_density(positions[i]);
-  }
-}
-
 Vector2d aqua_get_random_dir() {
   float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * M_PI;
   return Vector2d(cos(angle), sin(angle));
@@ -134,7 +135,7 @@ Vector2d aqua_get_random_dir() {
 float aqua_calculate_shared_pressure(float densityA, float densityB) {
   float pressureA = aqua_convert_density_to_pressure(densityA);
   float pressureB = aqua_convert_density_to_pressure(densityB);
-  return (pressureA / pressureB) / 2;
+  return (pressureA + pressureB) / 2;
 }
 
 Vector2d aqua_calculate_pressure_force(int particle_index) {
@@ -149,8 +150,9 @@ Vector2d aqua_calculate_pressure_force(int particle_index) {
     Vector2d dir = dst == 0 ? aqua_get_random_dir() : offset / dst;
     float slope = aqua_smoothing_kernel_derivative(dst, SMOOTHING_RADIUS);
     float density = densities[i];
-    pressure_force += -aqua_convert_density_to_pressure(density) * dir * slope *
-                      mass / density;
+    float shared_pressure =
+        aqua_calculate_shared_pressure(density, densities[particle_index]);
+    pressure_force += -shared_pressure * dir * slope * mass / density;
   }
 
   return pressure_force;
@@ -181,16 +183,20 @@ void aqua_keyboard(unsigned char c, int x, int y) {
 }
 
 void aqua_update(int value) {
-  if (PAUSE) {
+  if (!PAUSE) {
     for (int i = 0; i < positions.size(); i++) {
-      velocities[i] += Vector2d(0.f, 1.f) * GRAVITY * DT;
-      densities[i] = aqua_calculate_density(positions[i]);
+      velocities[i] += Vector2d(0.f, -1.f) * GRAVITY * DT;
+      predicted_positions[i] = positions[i] + velocities[i] * 1 / 120;
+    }
+
+    for (int i = 0; i < positions.size(); i++) {
+      densities[i] = aqua_calculate_density(predicted_positions[i]);
     }
 
     for (int i = 0; i < positions.size(); i++) {
       Vector2d pressure_force = aqua_calculate_pressure_force(i);
       Vector2d pressure_acceleration = pressure_force / densities[i];
-      velocities[i] = pressure_acceleration;
+      velocities[i] += pressure_acceleration * DT;
     }
 
     for (int i = 0; i < positions.size(); i++) {
