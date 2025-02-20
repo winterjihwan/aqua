@@ -2,6 +2,7 @@
 #include <GLUT/glut.h>
 #include <OpenGL/OpenGL.h>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <eigen3/Eigen/Dense>
 #include <vector>
@@ -16,16 +17,17 @@ using namespace std;
 #define VIEW_HEIGHT (1.5f * WINDOW_HEIGHT)
 #define BOUNDS_SIZE (Vector2d(VIEW_WIDTH, VIEW_HEIGHT))
 
+#define NUM_PARTICLES 30
 #define PARTICLE_SIZE 8.f
 #define PARTICLE_SPACING 10.f
-#define GRAVITY 0.00005f
+#define GRAVITY 0.005f
 #define DT 2.f
-#define COLLISION_DAMPLING 0.98f
-#define NUM_PARTICLES 300
+#define COLLISION_DAMPLING 0.95f
 #define SMOOTHING_RADIUS 160.f
+#define MASS 1.f
 
 #define TARGET_DENSITY 0.1f
-static float PRESSURE_MULTIPLIER = 0.2f;
+static float PRESSURE_MULTIPLIER = 0.03f;
 
 static bool PAUSE = false;
 
@@ -116,12 +118,11 @@ float aqua_convert_density_to_pressure(float density) {
 
 float aqua_calculate_density(Vector2d sample_point) {
   float density = 0;
-  const float mass = 1;
 
   for (auto &position : positions) {
     float dst = (position - sample_point).norm();
     float influence = aqua_smoothing_kernel(dst, SMOOTHING_RADIUS);
-    density += mass * influence;
+    density += MASS * influence;
   }
 
   return density;
@@ -140,22 +141,21 @@ float aqua_calculate_shared_pressure(float densityA, float densityB) {
 
 Vector2d aqua_calculate_pressure_force(int particle_index) {
   Vector2d pressure_force = Vector2d(0.f, 0.f);
-  const float mass = 1.f;
 
   for (int i = 0; i < NUM_PARTICLES; i++) {
     if (particle_index == i)
       continue;
     Vector2d offset = positions[i] - positions[particle_index];
     float dst = offset.norm();
-    Vector2d dir = dst == 0 ? aqua_get_random_dir() : offset / dst;
+    Vector2d dir = dst == 0 ? Vector2d(0.f, 0.f) : offset / dst;
     float slope = aqua_smoothing_kernel_derivative(dst, SMOOTHING_RADIUS);
     float density = densities[i];
     float shared_pressure =
         aqua_calculate_shared_pressure(density, densities[particle_index]);
-    pressure_force += -shared_pressure * dir * slope * mass / density;
+    pressure_force += shared_pressure * dir * slope * MASS / density;
   }
 
-  return pressure_force;
+  return -pressure_force;
 }
 
 void aqua_gl_init(void) {
@@ -176,9 +176,11 @@ void aqua_keyboard(unsigned char c, int x, int y) {
   case 'p':
     PAUSE = !PAUSE;
   case 'a':
-    PRESSURE_MULTIPLIER *= 2;
+    PRESSURE_MULTIPLIER *= 10;
+    break;
   case 'b':
-    PRESSURE_MULTIPLIER /= 2;
+    PRESSURE_MULTIPLIER /= 10;
+    break;
   }
 }
 
@@ -186,7 +188,7 @@ void aqua_update(int value) {
   if (!PAUSE) {
     for (int i = 0; i < positions.size(); i++) {
       velocities[i] += Vector2d(0.f, -1.f) * GRAVITY * DT;
-      predicted_positions[i] = positions[i] + velocities[i] * 1 / 120;
+      predicted_positions[i] = positions[i] + velocities[i] * 1 / 120.f;
     }
 
     for (int i = 0; i < positions.size(); i++) {
@@ -216,7 +218,6 @@ int main(int argc, char **argv) {
   glutDisplayFunc(aqua_render);
   glutTimerFunc(1000 / FPS, aqua_update, 0);
   glutKeyboardFunc(aqua_keyboard);
-
   aqua_init();
   aqua_gl_init();
 
